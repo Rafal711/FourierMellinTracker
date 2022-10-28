@@ -7,9 +7,6 @@ import compareImgs
 import filters
 
 
-#from mpl_toolkits import mplot3d
-
-
 class FourierMellinTracker:
     def __init__(self, edgeFilter, highPassFilter):
         self.edgeFilter = edgeFilter
@@ -112,7 +109,7 @@ class FourierMellinTracker:
         bottomSide = self.positionMid[1] + verSpace
         print(leftSide, rightSide, upperSide, bottomSide)
         if (leftSide > 0) and (upperSide > 0) and (rightSide < searchedImg.shape[0]) and (bottomSide < searchedImg.shape[1]):
-            self.pattern = searchedImg[leftSide:rightSide, upperSide:bottomSide]
+            self.pattern = searchedImg[upperSide:bottomSide, leftSide:rightSide]
             partSearched = copy.deepcopy(self.pattern)
             partSearched = self.reduceEdgeEffects(partSearched)
         else:
@@ -124,33 +121,21 @@ class FourierMellinTracker:
                 filterWin = filterWin[-upperSide:, :]
                 upperSide = 0
             if rightSide > searchedImg.shape[0]:
-                filterWin = filterWin[:, :rightSide - searchedImg.shape[0]]
+                filterWin = filterWin[:, :-(rightSide - searchedImg.shape[0])]
                 rightSide = searchedImg.shape[0]
             if bottomSide > searchedImg.shape[1]:
-                filterWin = filterWin[:bottomSide - searchedImg.shape[1], :]
+                filterWin = filterWin[:-(bottomSide - searchedImg.shape[1]), :]
                 bottomSide = searchedImg.shape[1]
 
-
             partSearched = searchedImg[upperSide:bottomSide, leftSide:rightSide]
-            #mask = ((upperSide - upperSide, bottomSide - bottomSide), leftSide - leftSide, rightSide - rightSide)
-
             partSearched = partSearched * filterWin
 
-
-
-        print(leftSide, rightSide, upperSide, bottomSide)
-
         partPattern = patternImg[upperSide:bottomSide, leftSide:rightSide]
-
-
         similarity = compareImgs.ssim(partPattern, partSearched)
-        self.plotImage(partPattern)
-        self.plotImage(partSearched)
-        print(similarity)
-        print(np.sum(partPattern - partSearched))
-
-
-
+        # self.plotImage(partPattern)
+        # self.plotImage(partSearched)
+        if similarity < 0.8:
+            self.positionMid = (None, None)
 
     def plotImages1x2(self, pattern, searchedImg, orgSize):
         squareX = self.positionMid[0] - orgSize[0] // 2

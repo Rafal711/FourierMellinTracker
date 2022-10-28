@@ -80,7 +80,7 @@ def testing_1():
     searchedImgs.remove('wzor.pgm')
 
     patternSection = cv2.imread(imgsPath + 'wzor.pgm', cv2.IMREAD_GRAYSCALE)
-    searchedSection = cv2.imread(imgsPath + searchedImgs[1], cv2.IMREAD_GRAYSCALE)
+    searchedSection = cv2.imread(imgsPath + searchedImgs[23], cv2.IMREAD_GRAYSCALE)
 
     # patternSection = cv2.imread(imgsPath + 'domek_r0_64.pgm', cv2.IMREAD_GRAYSCALE)
     # searchedSection = cv2.imread(imgsPath + "domek_r30.pgm", cv2.IMREAD_GRAYSCALE)
@@ -89,9 +89,6 @@ def testing_1():
     obj1.objectTracking(patternSection, searchedSection)
 
 
-
 if __name__ == '__main__':
     # startVideoProcessing()
     testing_1()
-
-
