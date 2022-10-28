@@ -1,12 +1,13 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import cv2
-import filters
+#from mpl_toolkits import mplot3d
 
 
 class FourierMellinTracker:
-    def __init__(self):
-        pass
+    def __init__(self, edgeFilter, highPassFilter):
+        self.edgeFilter = edgeFilter
+        self.highPassFilter = highPassFilter
 
     def imageZeroPaddingLUC(self, patternImg, searchedImgSize):
         resultSize = (searchedImgSize[0] - patternImg.shape[0], searchedImgSize[1] - patternImg.shape[1])
@@ -21,7 +22,7 @@ class FourierMellinTracker:
         return np.abs(imageFft)
 
     def reduceEdgeEffects(self, image):
-        return image * filters.hanning2D(image.shape[0])
+        return image * self.edgeFilter(image.shape[0])
 
     def logPolarTransform(self, image):
         center = (image.shape[0] // 2, image.shape[1] // 2)
@@ -98,7 +99,18 @@ class FourierMellinTracker:
         ax.axis('off')
         plt.show()
 
-    def updateObjectPosition(self, patternSection, searchedSection):
+    def plot3dImage(self, img):
+        ax = plt.axes(projection='3d')
+        xx, yy = np.meshgrid(np.arange(img.shape[0]), np.arange(img.shape[1]))
+        X, Y = xx.ravel(), yy.ravel()
+        Z = np.zeros_like(img).ravel()
+        dx = .25 * np.ones(img.size)
+        dy = .25 * np.ones(img.size)
+        dz = img.ravel()
+        ax.bar3d(X, Y, Z, dx, dy, dz, color = 'w')
+        plt.show()
+
+    def objectTracking(self, patternSection, searchedSection):
         pattern = self.reduceEdgeEffects(patternSection)
         patternZP = self.imageZeroPaddingLUC(pattern, searchedSection.shape)
 
@@ -108,8 +120,8 @@ class FourierMellinTracker:
         patternZPShiftedFft = np.fft.fftshift(patternZPFft)
         searchedShiftedFft = np.fft.fftshift(searchedFft)
 
-        patternFftMag = filters.highpassFilter(patternZPShiftedFft.shape) * self.magnitude(patternZPShiftedFft)
-        searchedFftMag = filters.highpassFilter(searchedShiftedFft.shape) * self.magnitude(searchedShiftedFft)
+        patternFftMag = self.highPassFilter(patternZPShiftedFft.shape) * self.magnitude(patternZPShiftedFft)
+        searchedFftMag = self.highPassFilter(searchedShiftedFft.shape) * self.magnitude(searchedShiftedFft)
 
         patternMagLogPolar, M = self.logPolarTransform(patternFftMag)
         searchedMagLogPolar, _ = self.logPolarTransform(searchedFftMag)
@@ -125,4 +137,5 @@ class FourierMellinTracker:
 
         patternRotatedScaled, shift = self.bestTransformedPattern(img1, img2, searchedFft)
 
+        #self.plot3dImage(imgsPhaseCorrMag)
         self.plotShiftedAndSearchedImg(patternRotatedScaled, shift, searchedSection)

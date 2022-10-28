@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import filters
 import os
 from enum import Enum
 from fourierMellinTracker import FourierMellinTracker
@@ -40,9 +41,6 @@ def drawPointForSelectedObject(frame):
 def handleMouseCallback():
     cv2.setMouseCallback('frame', getMousePosition)
 
-
-
-
 def startVideoProcessing():
     startFourierMellinTracking = False
 
@@ -64,8 +62,6 @@ def startVideoProcessing():
         if cv2.waitKey(1) == ord('q'):
             break
 
-
-
         print(mouseXY1)
         print(mouseXY2)
         print(state)
@@ -85,8 +81,8 @@ def testing_1():
     patternSection = cv2.imread(imgsPath + dir_list[-1], cv2.IMREAD_GRAYSCALE)
     searchedSection = cv2.imread(imgsPath + searchedImgs[8], cv2.IMREAD_GRAYSCALE)
 
-    obj1 = FourierMellinTracker()
-    obj1.updateObjectPosition(patternSection, searchedSection)
+    obj1 = FourierMellinTracker(filters.hanning2D, filters.highpass2d)
+    obj1.objectTracking(patternSection, searchedSection)
 
 
 
