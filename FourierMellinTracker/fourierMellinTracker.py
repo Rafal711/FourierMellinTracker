@@ -76,14 +76,15 @@ class FourierMellinTracker:
         dy, dx = np.unravel_index(np.argmax(betterPhaseCorr), betterPhaseCorr.shape)
         return betterImg, (dx, dy)
 
-    def plotShiftedAndSearchedImg(self, img, shift, searchedImg):
+    def shiftImage(self, img, shift):
         shiftedImg = np.roll(img, shift[0], axis=1)  # horizontally
-        shiftedImg = np.roll(shiftedImg, shift[1], axis=0)  # vertically
+        return np.roll(shiftedImg, shift[1], axis=0)  # vertically
 
+    def plotImages1x2(self, pattern, searchedImg):
         plt.figure(figsize=(12, 7))
 
         plt.subplot(1, 2, 1)
-        plt.imshow(shiftedImg)
+        plt.imshow(pattern)
         plt.gray()
         plt.title("pattern scaled and rotated")
 
@@ -137,5 +138,7 @@ class FourierMellinTracker:
 
         patternRotatedScaled, shift = self.bestTransformedPattern(img1, img2, searchedFft)
 
+        patternTransformed = self.shiftImage(patternRotatedScaled, shift)
+
         #self.plot3dImage(imgsPhaseCorrMag)
-        self.plotShiftedAndSearchedImg(patternRotatedScaled, shift, searchedSection)
+        self.plotImages1x2(patternTransformed, searchedSection)
