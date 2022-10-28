@@ -1,6 +1,12 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import cv2
+import copy
+import matplotlib.patches as patches
+import compareImgs
+import filters
+
+
 #from mpl_toolkits import mplot3d
 
 
@@ -8,6 +14,8 @@ class FourierMellinTracker:
     def __init__(self, edgeFilter, highPassFilter):
         self.edgeFilter = edgeFilter
         self.highPassFilter = highPassFilter
+        self.positionMid = (None, None)
+        self.pattern = None
 
     def imageZeroPaddingLUC(self, patternImg, searchedImgSize):
         resultSize = (searchedImgSize[0] - patternImg.shape[0], searchedImgSize[1] - patternImg.shape[1])
@@ -80,23 +88,98 @@ class FourierMellinTracker:
         shiftedImg = np.roll(img, shift[0], axis=1)  # horizontally
         return np.roll(shiftedImg, shift[1], axis=0)  # vertically
 
-    def plotImages1x2(self, pattern, searchedImg):
-        plt.figure(figsize=(12, 7))
+    def predictObjectPosition(self, patternSectionSize, searchedImgSize, shift):
+        dxZP = (searchedImgSize[0] - patternSectionSize[0]) // 2
+        dyZP = (searchedImgSize[1] - patternSectionSize[1]) // 2
 
-        plt.subplot(1, 2, 1)
-        plt.imshow(pattern)
-        plt.gray()
-        plt.title("pattern scaled and rotated")
+        x = dxZP + (patternSectionSize[0] // 2) + shift[0]
+        y = dyZP + (patternSectionSize[1] // 2) + shift[1]
 
-        plt.subplot(1, 2, 2)
-        plt.imshow(searchedImg)
-        plt.gray()
-        plt.title("searched image")
+        if x > searchedImgSize[0]:
+            x -= searchedImgSize[0]
+        if y > searchedImgSize[1]:
+            y -= searchedImgSize[1]
+
+        self.positionMid = (x, y)
+
+    def updatePatternAndPosition(self, patternSectionSize, patternImg, searchedImg):
+        horizSpace = patternSectionSize[0] // 2
+        verSpace = patternSectionSize[1] // 2
+
+        leftSide = self.positionMid[0] - horizSpace
+        rightSide = self.positionMid[0] + horizSpace
+        upperSide = self.positionMid[1] - verSpace
+        bottomSide = self.positionMid[1] + verSpace
+        print(leftSide, rightSide, upperSide, bottomSide)
+        if (leftSide > 0) and (upperSide > 0) and (rightSide < searchedImg.shape[0]) and (bottomSide < searchedImg.shape[1]):
+            self.pattern = searchedImg[leftSide:rightSide, upperSide:bottomSide]
+            partSearched = copy.deepcopy(self.pattern)
+            partSearched = self.reduceEdgeEffects(partSearched)
+        else:
+            filterWin = filters.hanning2D(patternSectionSize[0])
+            if leftSide < 0:
+                filterWin = filterWin[:, -leftSide:]
+                leftSide = 0
+            if upperSide < 0:
+                filterWin = filterWin[-upperSide:, :]
+                upperSide = 0
+            if rightSide > searchedImg.shape[0]:
+                filterWin = filterWin[:, :rightSide - searchedImg.shape[0]]
+                rightSide = searchedImg.shape[0]
+            if bottomSide > searchedImg.shape[1]:
+                filterWin = filterWin[:bottomSide - searchedImg.shape[1], :]
+                bottomSide = searchedImg.shape[1]
+
+
+            partSearched = searchedImg[upperSide:bottomSide, leftSide:rightSide]
+            #mask = ((upperSide - upperSide, bottomSide - bottomSide), leftSide - leftSide, rightSide - rightSide)
+
+            partSearched = partSearched * filterWin
+
+
+
+        print(leftSide, rightSide, upperSide, bottomSide)
+
+        partPattern = patternImg[upperSide:bottomSide, leftSide:rightSide]
+
+
+        similarity = compareImgs.ssim(partPattern, partSearched)
+        self.plotImage(partPattern)
+        self.plotImage(partSearched)
+        print(similarity)
+        print(np.sum(partPattern - partSearched))
+
+
+
+
+    def plotImages1x2(self, pattern, searchedImg, orgSize):
+        squareX = self.positionMid[0] - orgSize[0] // 2
+        squareY = self.positionMid[1] - orgSize[1] // 2
+        box1 = patches.Rectangle((squareX, squareY), orgSize[0], orgSize[1],
+                                linewidth=1, edgecolor='r', facecolor='none')
+        box2 = copy.copy(box1)
+
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 7))
+
+        ax1.imshow(pattern, cmap='gray', vmin=0, vmax=255)
+        ax1.plot(self.positionMid[0], self.positionMid[1], "ro")
+        ax1.set_title("pattern scaled and rotated")
+        ax1.add_patch(box1)
+        ax1.set_xlim(0, pattern.shape[0])
+        ax1.set_ylim(pattern.shape[1], 0)
+
+        ax2.imshow(searchedImg, cmap='gray', vmin=0, vmax=255)
+        ax2.plot(self.positionMid[0], self.positionMid[1], "ro")
+        ax2.set_title("searched image")
+        ax2.set_xlim(0, pattern.shape[0])
+        ax2.set_ylim(pattern.shape[1], 0)
+
+        ax2.add_patch(box2)
         plt.show()
 
     def plotImage(self, img):
         fig, ax = plt.subplots()
-        ax.imshow(img, 'gray')
+        ax.imshow(img, cmap='gray', vmin=0, vmax=255)
         ax.axis('off')
         plt.show()
 
@@ -140,5 +223,9 @@ class FourierMellinTracker:
 
         patternTransformed = self.shiftImage(patternRotatedScaled, shift)
 
-        #self.plot3dImage(imgsPhaseCorrMag)
-        self.plotImages1x2(patternTransformed, searchedSection)
+        self.predictObjectPosition(patternSection.shape, searchedSection.shape, shift)
+        self.plotImages1x2(patternTransformed, searchedSection, patternSection.shape)
+
+        self.updatePatternAndPosition(patternSection.shape, patternTransformed, searchedSection)
+
+        #self.plotImage(searchedSection - patternTransformed)

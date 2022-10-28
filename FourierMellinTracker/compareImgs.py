@@ -9,4 +9,4 @@ def mse(imageA, imageB):
     return error
 
 def ssim(imageA, imageB):
-    return structural_similarity(imageA, imageB)
+    return structural_similarity(imageA.astype("float"), imageB.astype("float"))
