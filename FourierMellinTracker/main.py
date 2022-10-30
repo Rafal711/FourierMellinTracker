@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import math
 import filters
 import os
 from enum import Enum
@@ -13,18 +14,20 @@ class State(Enum):
 
 
 state = State.PointsNotSelected
+squareHalfSide = 0
 mouseXY1 = (None, None)
 mouseXY2 = (None, None)
 
 
 def getMousePosition(event, x, y, flags, params):
-    global state, mouseXY1, mouseXY2
+    global state, mouseXY1, mouseXY2, squareHalfSide
     if event == cv2.EVENT_LBUTTONUP:
         if state == State.PointsNotSelected:
             mouseXY1 = x, y
             state = State.MiddleOfObjectSelected
         elif state == State.MiddleOfObjectSelected:
             mouseXY2 = x, y
+            squareHalfSide = round(math.dist(mouseXY1, mouseXY2) / 2) * 2
             state = State.HalfLengthOfSquareSelected
     elif event == cv2.EVENT_RBUTTONUP:
         mouseXY1 = None, None
@@ -37,6 +40,14 @@ def isMousePointDefined(point):
 def drawPointForSelectedObject(frame):
     if isMousePointDefined(mouseXY1):
         cv2.circle(frame, mouseXY1, radius=1, color=(0, 0, 255), thickness=-1)
+
+def drawTrackingBox(frame):
+    if state != State.HalfLengthOfSquareSelected:
+        return
+    pLeftUpper = (mouseXY1[0] - squareHalfSide, mouseXY1[1] + squareHalfSide)
+    pRightBottom = (mouseXY1[0] + squareHalfSide, mouseXY1[1] - squareHalfSide)
+    cv2.rectangle(frame, pLeftUpper, pRightBottom, (0, 0, 255), 1)
+
 
 def handleMouseCallback():
     cv2.setMouseCallback('frame', getMousePosition)
@@ -54,7 +65,7 @@ def startVideoProcessing():
         if not frameIsReady:
             print("Can't receive frame (stream end?). Exiting ...")
             break
-
+        drawTrackingBox(frame)
         drawPointForSelectedObject(frame)
         cv2.imshow('frame', frame)
         handleMouseCallback()
@@ -91,5 +102,5 @@ def testing_1():
 
 
 if __name__ == '__main__':
-    # startVideoProcessing()
-    testing_1()
+    startVideoProcessing()
+    # testing_1()
