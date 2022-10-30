@@ -74,6 +74,7 @@ def testing_1():
     path = "obrazy_Mellin"
     imgsPath = "obrazy_Mellin/"
     dir_list = os.listdir(path)
+    temp_pos = (None, None)
 
     searchedImgs = dir_list[:-1]
     searchedImgs.remove('domek_r0_64.pgm')
@@ -85,7 +86,7 @@ def testing_1():
     # patternSection = cv2.imread(imgsPath + 'domek_r0_64.pgm', cv2.IMREAD_GRAYSCALE)
     # searchedSection = cv2.imread(imgsPath + "domek_r30.pgm", cv2.IMREAD_GRAYSCALE)
 
-    obj1 = FourierMellinTracker(filters.hanning2D, filters.highpass2d)
+    obj1 = FourierMellinTracker(temp_pos, filters.hanning2D, filters.highpass2d)
     obj1.objectTracking(patternSection, searchedSection)
 
 
