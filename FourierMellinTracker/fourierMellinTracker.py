@@ -13,14 +13,14 @@ class FourierMellinTracker:
         self.objectIsVisible = True
         self.pattern = None
 
-    def imageZeroPaddingLUC(self, patternImg, searchedImgSize):
-        resultSize = (searchedImgSize[0] - patternImg.shape[0], searchedImgSize[1] - patternImg.shape[1])
-        return cv2.copyMakeBorder(patternImg, 0, resultSize[0], 0, resultSize[1], cv2.BORDER_CONSTANT, value=0)
+    def imageZeroPaddingLUC(self, image, targetSize):
+        resultSize = (targetSize[0] - image.shape[0], targetSize[1] - image.shape[1])
+        return cv2.copyMakeBorder(image, 0, resultSize[0], 0, resultSize[1], cv2.BORDER_CONSTANT, value=0)
 
-    def imageZeroPaddingMid(self, patternImg, searchedImgSize):
-        resultSize = ((searchedImgSize[0] - patternImg.shape[0]) // 2,
-                      (searchedImgSize[1] - patternImg.shape[1]) // 2)
-        return np.pad(patternImg, resultSize, "constant", constant_values=0)
+    def imageZeroPaddingMid(self, image, targetSize):
+        resultSize = ((targetSize[0] - image.shape[0]) // 2,
+                      (targetSize[1] - image.shape[1]) // 2)
+        return np.pad(image, resultSize, "constant", constant_values=0)
 
     def magnitude(self, imageFft):
         return np.abs(imageFft)
@@ -84,12 +84,12 @@ class FourierMellinTracker:
         shiftedImg = np.roll(img, shift[0], axis=1)  # horizontally
         return np.roll(shiftedImg, shift[1], axis=0)  # vertically
 
-    def predictObjectPosition(self, patternSectionSize, searchedImgSize, shift):
-        dxZP = (searchedImgSize[0] - patternSectionSize[0]) // 2
-        dyZP = (searchedImgSize[1] - patternSectionSize[1]) // 2
+    def predictObjectPosition(self, searchedImgSize, shift):
+        dxZP = (searchedImgSize[0] - self.pattern.shape[0]) // 2
+        dyZP = (searchedImgSize[1] - self.pattern.shape[1]) // 2
 
-        x = dxZP + (patternSectionSize[0] // 2) + shift[0]
-        y = dyZP + (patternSectionSize[1] // 2) + shift[1]
+        x = dxZP + (self.pattern.shape[0] // 2) + shift[0]
+        y = dyZP + (self.pattern.shape[1] // 2) + shift[1]
 
         if x > searchedImgSize[0]:
             x -= searchedImgSize[0]
@@ -98,16 +98,16 @@ class FourierMellinTracker:
 
         self.positionMid = (x, y)
 
-    def updatePatternAndPosition(self, position, patternSectionSize, patternImg, searchedImg):
-        horizSpace = patternSectionSize[0] // 2
-        verSpace = patternSectionSize[1] // 2
+    def updatePatternAndPosition(self, position, patternTransformed, searchedImg):
+        horizSpace = self.pattern.shape[0] // 2
+        verSpace = self.pattern.shape[1] // 2
 
         leftSide = position[0] - horizSpace
         rightSide = position[0] + horizSpace
         upperSide = position[1] - verSpace
         bottomSide = position[1] + verSpace
 
-        filterWin = filters.hanning2D(patternSectionSize[0])
+        filterWin = self.edgeFilter(self.pattern.shape[0])
         if leftSide < 0:
             filterWin = filterWin[:, -leftSide:]
             leftSide = 0
@@ -121,7 +121,7 @@ class FourierMellinTracker:
             filterWin = filterWin[:-(bottomSide - searchedImg.shape[1]), :]
             bottomSide = searchedImg.shape[1]
 
-        partPattern = patternImg[upperSide:bottomSide, leftSide:rightSide]
+        partPattern = patternTransformed[upperSide:bottomSide, leftSide:rightSide]
         partSearched = searchedImg[upperSide:bottomSide, leftSide:rightSide]
         partSearched = partSearched * filterWin
 
@@ -135,22 +135,32 @@ class FourierMellinTracker:
         else:
             self.objectIsVisible = False
 
-    def checkWrapedAroundPositions(self, patternSectionSize, patternImg, searchedImg, tolerance = 5):
+    def checkWrapedAroundPositions(self, patternTransformed, searchedImg, tolerance = 5):
         if not self.objectIsVisible:
             newPositionXY = list(self.positionMid)
 
             if (self.positionMid[0] - tolerance < 0) or (self.positionMid[0] + tolerance > searchedImg.shape[0]):
                 newPositionXY[0] = searchedImg.shape[0] - self.positionMid[0]
-                self.updatePatternAndPosition(newPositionXY, patternSectionSize, patternImg, searchedImg)
+                self.updatePatternAndPosition(newPositionXY, patternTransformed, searchedImg)
 
             if (self.positionMid[1] - tolerance < 0) or (self.positionMid[1] + tolerance > searchedImg.shape[1]):
                 newPositionXY[1] = searchedImg.shape[1] - self.positionMid[1]
-                self.updatePatternAndPosition(newPositionXY, patternSectionSize, patternImg, searchedImg)
+                self.updatePatternAndPosition(newPositionXY, patternTransformed, searchedImg)
 
             if self.positionMid != tuple(newPositionXY):
-                self.updatePatternAndPosition(newPositionXY, patternSectionSize, patternImg, searchedImg)
+                self.updatePatternAndPosition(newPositionXY, patternTransformed, searchedImg)
+
+    def initializePattern(self, patternImg):
+        if self.pattern is None:
+            self.pattern = patternImg
+
+    def getSearchedSection(self, frame):
+        searchedSectionSize = None
+        raise NotImplementedError
 
     def objectTracking(self, patternSection, searchedSection):
+        self.initializePattern(patternSection)
+
         pattern = self.reduceEdgeEffects(patternSection)
         patternZP = self.imageZeroPaddingLUC(pattern, searchedSection.shape)
 
@@ -179,11 +189,11 @@ class FourierMellinTracker:
 
         patternTransformed = self.shiftImage(patternRotatedScaled, shift)
 
-        self.predictObjectPosition(patternSection.shape, searchedSection.shape, shift)
+        self.predictObjectPosition(searchedSection.shape, shift)
 
-        self.updatePatternAndPosition(self.positionMid, patternSection.shape, patternTransformed, searchedSection)
-        self.checkWrapedAroundPositions(patternSection.shape, patternTransformed, searchedSection)
+        self.updatePatternAndPosition(self.positionMid, patternTransformed, searchedSection)
+        self.checkWrapedAroundPositions(patternTransformed, searchedSection)
 
-        iplt.plotImages1x2(patternTransformed, searchedSection, patternSection.shape, self.positionMid)
+        iplt.plotImages1x2(patternTransformed, searchedSection, self.pattern.shape, self.positionMid)
 
         #iplt.plotImage(searchedSection - patternTransformed)
