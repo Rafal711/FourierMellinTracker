@@ -2,15 +2,19 @@ import numpy as np
 import cv2
 import compareImgs
 import filters
+import imagePlot
 import imagePlot as iplt
 
-
+cnt = 0
 class FourierMellinTracker:
-    def __init__(self, position, edgeFilter, highPassFilter):
+    def __init__(self, edgeFilter, highPassFilter):
         self.edgeFilter = edgeFilter
         self.highPassFilter = highPassFilter
-        self.positionMid = position
+        self.positionMid = (None, None)
+        self.positionGlobal = (None, None)
+        self.positionGlobalShift = (0, 0)
         self.objectIsVisible = True
+        self.searchedArea = None
         self.pattern = None
 
     def imageZeroPaddingLUC(self, image, targetSize):
@@ -126,9 +130,9 @@ class FourierMellinTracker:
         partSearched = partSearched * filterWin
 
         similarity = compareImgs.ssim(partPattern, partSearched)
-
-        if similarity > 0.8:
-            if partSearched.shape == searchedImg.shape:
+        print(similarity)
+        if similarity > 0.6:
+            if partSearched.shape == self.pattern.shape:
                 self.pattern = searchedImg[upperSide:bottomSide, leftSide:rightSide]
             self.positionMid = position
             self.objectIsVisible = True
@@ -150,22 +154,93 @@ class FourierMellinTracker:
             if self.positionMid != tuple(newPositionXY):
                 self.updatePatternAndPosition(newPositionXY, patternTransformed, searchedImg)
 
-    def initializePattern(self, patternImg):
+    def initializePattern(self, patternImg, mouseXY):
         if self.pattern is None:
             self.pattern = patternImg
+            self.positionGlobal = mouseXY
 
-    def getSearchedSection(self, frame):
-        searchedSectionSize = None
-        raise NotImplementedError
+    def setSearchedArea(self, frame, searchRange, frameEqSearch):
+        if frameEqSearch:
+            self.searchedArea = frame
+            return
 
-    def objectTracking(self, patternSection, searchedSection):
-        self.initializePattern(patternSection)
+        height, width = frame.shape
 
-        pattern = self.reduceEdgeEffects(patternSection)
-        patternZP = self.imageZeroPaddingLUC(pattern, searchedSection.shape)
+        leftSide = self.positionGlobal[0] - searchRange
+        rightSide = self.positionGlobal[0] + searchRange
+        upperSide = self.positionGlobal[1] - searchRange
+        bottomSide = self.positionGlobal[1] + searchRange
+
+        if np.abs(bottomSide) - np.abs(upperSide) > height:
+            upperSide = 0
+            bottomSide = height
+            newSearchRange = int(height / 2)
+            leftSide = self.positionGlobal[0] - newSearchRange
+            rightSide = self.positionGlobal[0] + newSearchRange
+        if np.abs(rightSide) - np.abs(leftSide) > width:
+            leftSide = 0
+            rightSide = width
+            newSearchRange = int(width / 2)
+            upperSide = self.positionGlobal[1] - newSearchRange
+            bottomSide = self.positionGlobal[1] + newSearchRange
+
+        if leftSide < 0:
+            rightSide += (-leftSide)
+            leftSide = 0
+        elif rightSide > width:
+            leftSide -= (rightSide - width)
+            rightSide = width
+        if upperSide < 0:
+            bottomSide += (-upperSide)
+            upperSide = 0
+        elif bottomSide > height:
+            upperSide -= (bottomSide - height)
+            bottomSide = height
+
+        self.positionGlobalShift = (leftSide, upperSide)
+        # srodek search
+        # searchMidX = upperSide + ((bottomSide - upperSide) / 2)
+        # searchMidY = leftSide + ((rightSide - leftSide) / 2)
+        self.searchedArea = frame[upperSide:bottomSide, leftSide:rightSide]
+
+    def updatePositionGlobal(self, shift, frame, searchRange):
+        globalX = self.positionGlobalShift[0] + self.positionMid[0]
+        globalY = self.positionGlobalShift[1] + self.positionMid[1]
+        self.positionGlobal = globalX, globalY
+
+        leftSide = globalX - searchRange
+        rightSide = globalX + searchRange
+        upperSide = globalY - searchRange
+        bottomSide = globalY + searchRange
+        height, width = frame.shape
+        if leftSide < 0:
+            rightSide += (-leftSide)
+            leftSide = 0
+        elif rightSide > width:
+            leftSide -= (rightSide - width)
+            rightSide = width
+        if upperSide < 0:
+            bottomSide += (-upperSide)
+            upperSide = 0
+        elif bottomSide > height:
+            upperSide -= (bottomSide - height)
+
+        #imagePlot.plotImage(frame[upperSide:bottomSide, leftSide:rightSide])
+
+    def objectTracking(self, patternSection, frame, mouseXY, frameEqSearch=False):
+        global cnt
+        self.initializePattern(patternSection, mouseXY)
+        self.setSearchedArea(frame, (round((self.pattern.shape[0] * 1.5) / 2)) * 2, frameEqSearch)
+        # print("pattern shape: ", self.pattern.shape)
+        # print("area shape: ", self.searchedArea.shape)
+        imagePlot.plotImage(self.searchedArea, "searchArea")
+        imagePlot.plotImage(self.pattern, "pattern")
+
+        pattern = self.reduceEdgeEffects(self.pattern)
+        patternZP = self.imageZeroPaddingLUC(pattern, self.searchedArea.shape)
 
         patternZPFft = np.fft.fft2(patternZP)
-        searchedFft = np.fft.fft2(searchedSection)
+        searchedFft = np.fft.fft2(self.searchedArea)
 
         patternZPShiftedFft = np.fft.fftshift(patternZPFft)
         searchedShiftedFft = np.fft.fftshift(searchedFft)
@@ -183,17 +258,23 @@ class FourierMellinTracker:
 
         angles, scale = self.calculateAnglesAndScale(imgsPhaseCorrMag, searchedMagLogPolarFft.shape, M)
 
-        img1, img2 = self.getRotatedScaledPatterns(pattern, searchedSection.shape, angles, scale)
+        img1, img2 = self.getRotatedScaledPatterns(pattern, self.searchedArea.shape, angles, scale)
+        if cnt > 4:
+            imagePlot.plotImage(img1, "img1")
+            imagePlot.plotImage(img2, "img2")
+        cnt += 1
 
         patternRotatedScaled, shift = self.bestTransformedPattern(img1, img2, searchedFft)
 
         patternTransformed = self.shiftImage(patternRotatedScaled, shift)
 
-        self.predictObjectPosition(searchedSection.shape, shift)
+        self.predictObjectPosition(self.searchedArea.shape, shift)
 
-        self.updatePatternAndPosition(self.positionMid, patternTransformed, searchedSection)
-        self.checkWrapedAroundPositions(patternTransformed, searchedSection)
+        self.updatePatternAndPosition(self.positionMid, patternTransformed, self.searchedArea)
+        self.checkWrapedAroundPositions(patternTransformed, self.searchedArea)
 
-        iplt.plotImages1x2(patternTransformed, searchedSection, self.pattern.shape, self.positionMid)
+        self.updatePositionGlobal(shift, frame, self.pattern.shape[0])
+        iplt.plotImages1x2(patternTransformed, self.searchedArea, self.pattern.shape, self.positionMid, self.objectIsVisible)
+        #print(self.positionMid)
+        print("koniec")
 
-        #iplt.plotImage(searchedSection - patternTransformed)
