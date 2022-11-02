@@ -64,7 +64,7 @@ def fpsToDelayTime(fps):
     return int(1000/fps)
 
 def startVideoProcessing():
-    startFourierMellinTracking = False
+    isObjectVisible = False
 
     video = cv2.VideoCapture(0)
     if not video.isOpened():
@@ -94,13 +94,14 @@ def startVideoProcessing():
 def startVideoObjectTracking():
     moviePath = r"D:\movies\domek.mp4"   # 0 dla kamery
     video = cv2.VideoCapture(0)
+    isObjectVisible = True
 
     if not video.isOpened():
         print("Cannot open video/camera")
         exit()
 
     current_frame = 0
-    frames_per_second = 1
+    frames_per_second = 5
     frame_rate = video.get(cv2.CAP_PROP_FPS)  # video frame rate
     if frames_per_second > frame_rate or frames_per_second == -1:
         frames_per_second = frame_rate
@@ -116,6 +117,7 @@ def startVideoObjectTracking():
             break
 
         grayFrame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        # if isObjectVisible:
         drawTrackingBox(frame)
         drawPointForSelectedObject(frame)
         handleMouseCallback()
@@ -129,11 +131,10 @@ def startVideoObjectTracking():
                 if pattern is not None:
                     objTracker.objectTracking(pattern, grayFrame, mouseXY1)
                     mouseXY1 = objTracker.positionGlobal
+                    isObjectVisible = objTracker.objectIsVisible
 
         if cv2.waitKey(1) == ord('q'):
             break
-
-        print(mouseXY1)
 
         current_frame += 1
         #cv2.waitKey(delayTime)

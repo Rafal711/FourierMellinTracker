@@ -2,12 +2,11 @@ import numpy as np
 import cv2
 import compareImgs
 import filters
-import imagePlot
 import imagePlot as iplt
 
-cnt = 0
+
 class FourierMellinTracker:
-    def __init__(self, edgeFilter, highPassFilter):
+    def __init__(self, edgeFilter = filters.hanning2D, highPassFilter = filters.highpass2d):
         self.edgeFilter = edgeFilter
         self.highPassFilter = highPassFilter
         self.positionMid = (None, None)
@@ -130,7 +129,7 @@ class FourierMellinTracker:
         partSearched = partSearched * filterWin
 
         similarity = compareImgs.ssim(partPattern, partSearched)
-        print(similarity)
+
         if similarity > 0.6:
             if partSearched.shape == self.pattern.shape:
                 self.pattern = searchedImg[upperSide:bottomSide, leftSide:rightSide]
@@ -142,7 +141,7 @@ class FourierMellinTracker:
     def checkWrapedAroundPositions(self, patternTransformed, searchedImg, tolerance = 5):
         if not self.objectIsVisible:
             newPositionXY = list(self.positionMid)
-
+            print("DEBUG 1")
             if (self.positionMid[0] - tolerance < 0) or (self.positionMid[0] + tolerance > searchedImg.shape[0]):
                 newPositionXY[0] = searchedImg.shape[0] - self.positionMid[0]
                 self.updatePatternAndPosition(newPositionXY, patternTransformed, searchedImg)
@@ -198,9 +197,6 @@ class FourierMellinTracker:
             bottomSide = height
 
         self.positionGlobalShift = (leftSide, upperSide)
-        # srodek search
-        # searchMidX = upperSide + ((bottomSide - upperSide) / 2)
-        # searchMidY = leftSide + ((rightSide - leftSide) / 2)
         self.searchedArea = frame[upperSide:bottomSide, leftSide:rightSide]
 
     def updatePositionGlobal(self, shift, frame, searchRange):
@@ -208,33 +204,9 @@ class FourierMellinTracker:
         globalY = self.positionGlobalShift[1] + self.positionMid[1]
         self.positionGlobal = globalX, globalY
 
-        leftSide = globalX - searchRange
-        rightSide = globalX + searchRange
-        upperSide = globalY - searchRange
-        bottomSide = globalY + searchRange
-        height, width = frame.shape
-        if leftSide < 0:
-            rightSide += (-leftSide)
-            leftSide = 0
-        elif rightSide > width:
-            leftSide -= (rightSide - width)
-            rightSide = width
-        if upperSide < 0:
-            bottomSide += (-upperSide)
-            upperSide = 0
-        elif bottomSide > height:
-            upperSide -= (bottomSide - height)
-
-        #imagePlot.plotImage(frame[upperSide:bottomSide, leftSide:rightSide])
-
     def objectTracking(self, patternSection, frame, mouseXY, frameEqSearch=False):
-        global cnt
         self.initializePattern(patternSection, mouseXY)
         self.setSearchedArea(frame, (round((self.pattern.shape[0] * 1.5) / 2)) * 2, frameEqSearch)
-        # print("pattern shape: ", self.pattern.shape)
-        # print("area shape: ", self.searchedArea.shape)
-        imagePlot.plotImage(self.searchedArea, "searchArea")
-        imagePlot.plotImage(self.pattern, "pattern")
 
         pattern = self.reduceEdgeEffects(self.pattern)
         patternZP = self.imageZeroPaddingLUC(pattern, self.searchedArea.shape)
@@ -259,10 +231,6 @@ class FourierMellinTracker:
         angles, scale = self.calculateAnglesAndScale(imgsPhaseCorrMag, searchedMagLogPolarFft.shape, M)
 
         img1, img2 = self.getRotatedScaledPatterns(pattern, self.searchedArea.shape, angles, scale)
-        if cnt > 4:
-            imagePlot.plotImage(img1, "img1")
-            imagePlot.plotImage(img2, "img2")
-        cnt += 1
 
         patternRotatedScaled, shift = self.bestTransformedPattern(img1, img2, searchedFft)
 
@@ -274,7 +242,3 @@ class FourierMellinTracker:
         self.checkWrapedAroundPositions(patternTransformed, self.searchedArea)
 
         self.updatePositionGlobal(shift, frame, self.pattern.shape[0])
-        iplt.plotImages1x2(patternTransformed, self.searchedArea, self.pattern.shape, self.positionMid, self.objectIsVisible)
-        #print(self.positionMid)
-        print("koniec")
-
