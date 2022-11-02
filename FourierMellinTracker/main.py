@@ -17,7 +17,6 @@ state = State.PointsNotSelected
 squareHalfSide = 0
 mouseXY1 = (None, None)
 mouseXY2 = (None, None)
-pattern = None
 
 
 def getMousePosition(event, x, y, flags, params):
@@ -50,12 +49,11 @@ def drawTrackingBox(frame):
     cv2.rectangle(frame, pLeftUpper, pRightBottom, (0, 0, 255), 1)
 
 def setPatternArea(frame):
-    global pattern
     leftSide = mouseXY1[0] - squareHalfSide
     rightSide = mouseXY1[0] + squareHalfSide
     upperSide = mouseXY1[1] - squareHalfSide
     bottomSide = mouseXY1[1] + squareHalfSide
-    pattern = frame[upperSide:bottomSide, leftSide:rightSide]
+    return frame[upperSide:bottomSide, leftSide:rightSide]
 
 def handleMouseCallback():
     cv2.setMouseCallback('frame', getMousePosition)
@@ -63,52 +61,24 @@ def handleMouseCallback():
 def fpsToDelayTime(fps):
     return int(1000/fps)
 
-def startVideoProcessing():
-    isObjectVisible = False
-
-    video = cv2.VideoCapture(0)
-    if not video.isOpened():
-        print("Cannot open video/camera")
-        exit()
-
-    while True:
-        frameIsReady, frame = video.read()
-        if not frameIsReady:
-            print("Can't receive frame (stream end?). Exiting ...")
-            break
-        drawTrackingBox(frame)
-        drawPointForSelectedObject(frame)
-        cv2.imshow('frame', frame)
-        handleMouseCallback()
-
-        if cv2.waitKey(1) == ord('q'):
-            break
-
-        print(mouseXY1)
-        print(mouseXY2)
-        print(state)
-
-    video.release()
-    cv2.destroyAllWindows()
-
 def startVideoObjectTracking():
-    moviePath = r"D:\movies\domek.mp4"   # 0 dla kamery
-    video = cv2.VideoCapture(0)
-    isObjectVisible = True
-
+    moviePath = r"D:\movies\domek.mp4"
+    video = cv2.VideoCapture(0)  # 0 dla kamery
     if not video.isOpened():
         print("Cannot open video/camera")
         exit()
-
-    current_frame = 0
-    frames_per_second = 5
-    frame_rate = video.get(cv2.CAP_PROP_FPS)  # video frame rate
-    if frames_per_second > frame_rate or frames_per_second == -1:
-        frames_per_second = frame_rate
 
     global mouseXY1
+    current_frame = 0
+    isObjectVisible = True
+    frameRate = video.get(cv2.CAP_PROP_FPS)
+
+    framesPerSecond = 5
+    if framesPerSecond > frameRate or framesPerSecond == -1:
+        framesPerSecond = frameRate
+    # delayTime = fpsToDelayTime(100)
+
     objTracker = FourierMellinTracker(filters.hanning2D, filters.highpass2d)
-    delayTime = fpsToDelayTime(100)
 
     while True:
         frameIsReady, frame = video.read()
@@ -117,21 +87,18 @@ def startVideoObjectTracking():
             break
 
         grayFrame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        # if isObjectVisible:
+
         drawTrackingBox(frame)
         drawPointForSelectedObject(frame)
         handleMouseCallback()
 
-
-        if current_frame % (math.floor(frame_rate / frames_per_second)) == 0:
+        if current_frame % (math.floor(frameRate / framesPerSecond)) == 0:
             cv2.imshow('frame', frame)
 
             if state == State.HalfLengthOfSquareSelected:
-                setPatternArea(grayFrame)
-                if pattern is not None:
-                    objTracker.objectTracking(pattern, grayFrame, mouseXY1)
-                    mouseXY1 = objTracker.positionGlobal
-                    isObjectVisible = objTracker.objectIsVisible
+                objTracker.objectTracking(setPatternArea(grayFrame), grayFrame, mouseXY1)
+                mouseXY1 = objTracker.positionGlobal
+                isObjectVisible = objTracker.objectIsVisible
 
         if cv2.waitKey(1) == ord('q'):
             break
@@ -142,7 +109,7 @@ def startVideoObjectTracking():
     video.release()
     cv2.destroyAllWindows()
 
-def testing_1():
+def imageTesting():
     path = "obrazy_Mellin"
     imgsPath = "obrazy_Mellin/"
     dir_list = os.listdir(path)
@@ -169,5 +136,5 @@ def testing_1():
 
 if __name__ == '__main__':
     # startVideoProcessing()
-    # testing_1()
+    # imageTesting()
     startVideoObjectTracking()

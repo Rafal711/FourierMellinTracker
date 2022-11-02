@@ -242,3 +242,4 @@ class FourierMellinTracker:
         self.checkWrapedAroundPositions(patternTransformed, self.searchedArea)
 
         self.updatePositionGlobal(shift, frame, self.pattern.shape[0])
+        # iplt.plotImages1x2(patternTransformed, self.searchedArea, self.pattern.shape, self.positionMid, self.objectIsVisible)
