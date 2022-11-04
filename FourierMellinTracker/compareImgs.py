@@ -1,5 +1,6 @@
 import numpy as np
-import filters
+from PIL import Image
+import imagehash
 from skimage.metrics import structural_similarity
 
 
@@ -10,3 +11,10 @@ def mse(imageA, imageB):
 
 def ssim(imageA, imageB):
     return structural_similarity(imageA.astype("float"), imageB.astype("float"))
+
+def averageHash(imageA, imageB):
+    hashA = imagehash.average_hash(Image.fromarray(imageA))
+    hashB = imagehash.average_hash(Image.fromarray(imageB))
+    cutoff = 5
+
+    return (hashA - hashB) < cutoff

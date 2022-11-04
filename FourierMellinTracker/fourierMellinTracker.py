@@ -125,14 +125,16 @@ class FourierMellinTracker:
             bottomSide = searchedImg.shape[1]
 
         partPattern = patternTransformed[upperSide:bottomSide, leftSide:rightSide]
+        partPattern = partPattern * filterWin
         partSearched = searchedImg[upperSide:bottomSide, leftSide:rightSide]
         partSearched = partSearched * filterWin
 
         similarity = compareImgs.ssim(partPattern, partSearched)
 
-        if similarity > 0.6:
+        if similarity > 0.5:
             if partSearched.shape == self.pattern.shape:
                 self.pattern = searchedImg[upperSide:bottomSide, leftSide:rightSide]
+        if similarity > 0.3:
             self.positionMid = position
             self.objectIsVisible = True
         else:
@@ -141,7 +143,6 @@ class FourierMellinTracker:
     def checkWrapedAroundPositions(self, patternTransformed, searchedImg, tolerance = 5):
         if not self.objectIsVisible:
             newPositionXY = list(self.positionMid)
-            print("DEBUG 1")
             if (self.positionMid[0] - tolerance < 0) or (self.positionMid[0] + tolerance > searchedImg.shape[0]):
                 newPositionXY[0] = searchedImg.shape[0] - self.positionMid[0]
                 self.updatePatternAndPosition(newPositionXY, patternTransformed, searchedImg)
@@ -200,13 +201,14 @@ class FourierMellinTracker:
         self.searchedArea = frame[upperSide:bottomSide, leftSide:rightSide]
 
     def updatePositionGlobal(self, shift, frame, searchRange):
-        globalX = self.positionGlobalShift[0] + self.positionMid[0]
-        globalY = self.positionGlobalShift[1] + self.positionMid[1]
-        self.positionGlobal = globalX, globalY
+        if self.objectIsVisible:
+            globalX = self.positionGlobalShift[0] + self.positionMid[0]
+            globalY = self.positionGlobalShift[1] + self.positionMid[1]
+            self.positionGlobal = globalX, globalY
 
     def objectTracking(self, patternSection, frame, mouseXY, frameEqSearch=False):
         self.initializePattern(patternSection, mouseXY)
-        self.setSearchedArea(frame, (round((self.pattern.shape[0] * 1.5) / 2)) * 2, frameEqSearch)
+        self.setSearchedArea(frame, (round((self.pattern.shape[0] * 1.0) / 2)) * 2, frameEqSearch)
 
         pattern = self.reduceEdgeEffects(self.pattern)
         patternZP = self.imageZeroPaddingLUC(pattern, self.searchedArea.shape)
@@ -230,7 +232,7 @@ class FourierMellinTracker:
 
         angles, scale = self.calculateAnglesAndScale(imgsPhaseCorrMag, searchedMagLogPolarFft.shape, M)
 
-        img1, img2 = self.getRotatedScaledPatterns(pattern, self.searchedArea.shape, angles, scale)
+        img1, img2 = self.getRotatedScaledPatterns(self.pattern, self.searchedArea.shape, angles, scale)
 
         patternRotatedScaled, shift = self.bestTransformedPattern(img1, img2, searchedFft)
 

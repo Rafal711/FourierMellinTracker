@@ -78,6 +78,9 @@ def startVideoObjectTracking():
         framesPerSecond = frameRate
     # delayTime = fpsToDelayTime(100)
 
+    ## dim = (width, height)
+    # dim = (800, 600)
+
     objTracker = FourierMellinTracker(filters.hanning2D, filters.highpass2d)
 
     while True:
@@ -86,6 +89,7 @@ def startVideoObjectTracking():
             print("Can't receive frame (stream end?). Exiting ...")
             break
 
+        # frame = cv2.resize(frame, dim, interpolation=cv2.INTER_AREA)
         grayFrame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
         drawTrackingBox(frame)
@@ -100,11 +104,14 @@ def startVideoObjectTracking():
                 mouseXY1 = objTracker.positionGlobal
                 isObjectVisible = objTracker.objectIsVisible
 
+        if state == State.PointsNotSelected:
+            objTracker.pattern = None
+
         if cv2.waitKey(1) == ord('q'):
             break
 
         current_frame += 1
-        #cv2.waitKey(delayTime)
+        # cv2.waitKey(delayTime)
 
     video.release()
     cv2.destroyAllWindows()
