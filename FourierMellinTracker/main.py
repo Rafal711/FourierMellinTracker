@@ -68,7 +68,7 @@ def startVideoObjectTracking():
         print("Cannot open video/camera")
         exit()
 
-    global mouseXY1
+    global mouseXY1, squareHalfSide
     current_frame = 0
     isObjectVisible = True
     frameRate = video.get(cv2.CAP_PROP_FPS)
@@ -103,6 +103,7 @@ def startVideoObjectTracking():
                 objTracker.objectTracking(setPatternArea(grayFrame), grayFrame, mouseXY1)
                 mouseXY1 = objTracker.positionGlobal
                 isObjectVisible = objTracker.objectIsVisible
+                squareHalfSide = objTracker.pattern.shape[0] // 2
 
         if state == State.PointsNotSelected:
             objTracker.pattern = None

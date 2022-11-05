@@ -13,6 +13,7 @@ class FourierMellinTracker:
         self.positionGlobal = (None, None)
         self.positionGlobalShift = (0, 0)
         self.objectIsVisible = True
+        self.searchRange = None
         self.searchedArea = None
         self.pattern = None
 
@@ -101,7 +102,34 @@ class FourierMellinTracker:
 
         self.positionMid = (x, y)
 
-    def updatePatternAndPosition(self, position, patternTransformed, searchedImg):
+    def adaptivePatternArea(self, position, searchedImg, scale, leftSide, rightSide, upperSide, bottomSide):
+        if scale == 1:
+            return searchedImg[upperSide:bottomSide, leftSide:rightSide]
+
+        newPatternSize = self.pattern.shape[0] * scale
+        dSide = round((newPatternSize - self.pattern.shape[0]) / 4) * 2
+
+        newLeftSide = leftSide - dSide
+        newRightSide = rightSide + dSide
+        newUpperSide = upperSide - dSide
+        newBottomSide = bottomSide + dSide
+
+        if newLeftSide < 0:
+            newLeftSide = 0
+        if newUpperSide < 0:
+            newUpperSide = 0
+        if newRightSide > searchedImg.shape[1]:
+            newRightSide = searchedImg.shape[1]
+        if newBottomSide > searchedImg.shape[0]:
+            newBottomSide = searchedImg.shape[0]
+
+        newRangeCriterion = min if scale > 1 else max
+        newRange = newRangeCriterion(position[0] - newLeftSide, newRightSide - position[0],
+                                     position[1] - newUpperSide, newBottomSide - position[1])
+
+        return searchedImg[position[1]-newRange : position[1]+newRange, position[0]-newRange : position[0]+newRange]
+
+    def updatePatternAndPosition(self, position, patternTransformed, searchedImg, scale = 1):
         horizSpace = self.pattern.shape[0] // 2
         verSpace = self.pattern.shape[1] // 2
 
@@ -117,12 +145,12 @@ class FourierMellinTracker:
         if upperSide < 0:
             filterWin = filterWin[-upperSide:, :]
             upperSide = 0
-        if rightSide > searchedImg.shape[0]:
-            filterWin = filterWin[:, :-(rightSide - searchedImg.shape[0])]
-            rightSide = searchedImg.shape[0]
-        if bottomSide > searchedImg.shape[1]:
-            filterWin = filterWin[:-(bottomSide - searchedImg.shape[1]), :]
-            bottomSide = searchedImg.shape[1]
+        if rightSide > searchedImg.shape[1]:
+            filterWin = filterWin[:, :-(rightSide - searchedImg.shape[1])]
+            rightSide = searchedImg.shape[1]
+        if bottomSide > searchedImg.shape[0]:
+            filterWin = filterWin[:-(bottomSide - searchedImg.shape[0]), :]
+            bottomSide = searchedImg.shape[0]
 
         partPattern = patternTransformed[upperSide:bottomSide, leftSide:rightSide]
         partPattern = partPattern * filterWin
@@ -133,9 +161,11 @@ class FourierMellinTracker:
 
         if similarity > 0.5:
             if partSearched.shape == self.pattern.shape:
-                self.pattern = searchedImg[upperSide:bottomSide, leftSide:rightSide]
-        if similarity > 0.3:
+                self.pattern = self.adaptivePatternArea(
+                    position, searchedImg, scale, leftSide, rightSide, upperSide, bottomSide)
+        if similarity > 0.4:
             self.positionMid = position
+        if similarity > 0.3:
             self.objectIsVisible = True
         else:
             self.objectIsVisible = False
@@ -157,6 +187,7 @@ class FourierMellinTracker:
     def initializePattern(self, patternImg, mouseXY):
         if self.pattern is None:
             self.pattern = patternImg
+            self.searchRange = (round((patternImg.shape[0] * 1.0) / 2)) * 2
             self.positionGlobal = mouseXY
 
     def setSearchedArea(self, frame, searchRange, frameEqSearch):
@@ -208,7 +239,7 @@ class FourierMellinTracker:
 
     def objectTracking(self, patternSection, frame, mouseXY, frameEqSearch=False):
         self.initializePattern(patternSection, mouseXY)
-        self.setSearchedArea(frame, (round((self.pattern.shape[0] * 1.0) / 2)) * 2, frameEqSearch)
+        self.setSearchedArea(frame, self.searchRange, frameEqSearch)
 
         pattern = self.reduceEdgeEffects(self.pattern)
         patternZP = self.imageZeroPaddingLUC(pattern, self.searchedArea.shape)
@@ -240,7 +271,7 @@ class FourierMellinTracker:
 
         self.predictObjectPosition(self.searchedArea.shape, shift)
 
-        self.updatePatternAndPosition(self.positionMid, patternTransformed, self.searchedArea)
+        self.updatePatternAndPosition(self.positionMid, patternTransformed, self.searchedArea, scale)
         self.checkWrapedAroundPositions(patternTransformed, self.searchedArea)
 
         self.updatePositionGlobal(shift, frame, self.pattern.shape[0])
