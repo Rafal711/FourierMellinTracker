@@ -81,6 +81,13 @@ def startVideoObjectTracking():
     ## dim = (width, height)
     # dim = (800, 600)
 
+    frameWidth = int(video.get(3))
+    frameHeight = int(video.get(4))
+    size = (frameWidth, frameHeight)
+    # fourcc = cv2.cv.CV_FOURCC(*'DIVX')
+    # out = cv2.VideoWriter('output.avi',fourcc, 20.0, (640,480))
+    recorder = cv2.VideoWriter('output.avi', cv2.VideoWriter_fourcc(*'MJPG'), 30, size)
+
     objTracker = FourierMellinTracker(filters.hanning2D, filters.highpass2d)
 
     while True:
@@ -111,10 +118,13 @@ def startVideoObjectTracking():
         if cv2.waitKey(1) == ord('q'):
             break
 
+        recorder.write(frame)
+
         current_frame += 1
         # cv2.waitKey(delayTime)
 
     video.release()
+    recorder.release()
     cv2.destroyAllWindows()
 
 def imageTesting():
