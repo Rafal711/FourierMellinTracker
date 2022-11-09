@@ -11,7 +11,7 @@ def plotImage(img, title=""):
     ax.set_title(title)
     plt.show()
 
-def plotImages1x2(pattern, searchedImg, orgSize, position, visibilityFlag=True):
+def plotImages1x2(pattern, searchedImg, orgSize, position, visibilityFlag=True, frameNr=0):
     squareX = position[0] - orgSize[0] // 2
     squareY = position[1] - orgSize[1] // 2
     box1 = patches.Rectangle((squareX, squareY), orgSize[0], orgSize[1],
@@ -35,7 +35,8 @@ def plotImages1x2(pattern, searchedImg, orgSize, position, visibilityFlag=True):
     ax2.set_ylim(pattern.shape[1], 0)
     if visibilityFlag:
         ax2.add_patch(box2)
-    plt.show()
+    plt.savefig(f'testVideoResult/foo{frameNr}.png')
+    # plt.show()
 
 def plot3dImage(img):
     ax = plt.axes(projection='3d')

@@ -27,7 +27,7 @@ def getMousePosition(event, x, y, flags, params):
             state = State.MiddleOfObjectSelected
         elif state == State.MiddleOfObjectSelected:
             mouseXY2 = x, y
-            squareHalfSide = round(math.dist(mouseXY1, mouseXY2) / 2) * 2
+            squareHalfSide = int(round(math.dist(mouseXY1, mouseXY2)))
             state = State.HalfLengthOfSquareSelected
     elif event == cv2.EVENT_RBUTTONUP:
         mouseXY1 = None, None
@@ -62,8 +62,12 @@ def fpsToDelayTime(fps):
     return int(1000/fps)
 
 def startVideoObjectTracking():
-    moviePath = r"D:\movies\domek.mp4"
-    video = cv2.VideoCapture(0)  # 0 dla kamery
+    movieNames = ["car4", "car11", "david_indoor", "trellis"]
+    moviePath = "testVideos/"
+    movieFormat = ".avi"
+    choosenMovie = moviePath + movieNames[0] + movieFormat
+
+    video = cv2.VideoCapture(choosenMovie)  # 0 dla kamery
     if not video.isOpened():
         print("Cannot open video/camera")
         exit()
@@ -73,6 +77,7 @@ def startVideoObjectTracking():
     isObjectVisible = True
     frameRate = video.get(cv2.CAP_PROP_FPS)
 
+    playVideo = True
     framesPerSecond = 5
     if framesPerSecond > frameRate or framesPerSecond == -1:
         framesPerSecond = frameRate
@@ -86,31 +91,30 @@ def startVideoObjectTracking():
     size = (frameWidth, frameHeight)
     # fourcc = cv2.cv.CV_FOURCC(*'DIVX')
     # out = cv2.VideoWriter('output.avi',fourcc, 20.0, (640,480))
-    recorder = cv2.VideoWriter('output.avi', cv2.VideoWriter_fourcc(*'MJPG'), 30, size)
+    # recorder = cv2.VideoWriter('output.avi', cv2.VideoWriter_fourcc(*'MJPG'), 30, size)
 
     objTracker = FourierMellinTracker(filters.hanning2D, filters.highpass2d)
 
     while True:
-        frameIsReady, frame = video.read()
-        if not frameIsReady:
-            print("Can't receive frame (stream end?). Exiting ...")
-            break
+        if playVideo:
+            frameIsReady, frame = video.read()
+            if not frameIsReady:
+                print("Can't receive frame (stream end?). Exiting ...")
+                break
 
         # frame = cv2.resize(frame, dim, interpolation=cv2.INTER_AREA)
         grayFrame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-        drawTrackingBox(frame)
-        drawPointForSelectedObject(frame)
-        handleMouseCallback()
-
-        if current_frame % (math.floor(frameRate / framesPerSecond)) == 0:
-            cv2.imshow('frame', frame)
-
-            if state == State.HalfLengthOfSquareSelected:
+        if True: #current_frame % (math.floor(frameRate / framesPerSecond)) == 0:
+            if state == State.HalfLengthOfSquareSelected and playVideo:
                 objTracker.objectTracking(setPatternArea(grayFrame), grayFrame, mouseXY1)
                 mouseXY1 = objTracker.positionGlobal
                 isObjectVisible = objTracker.objectIsVisible
                 squareHalfSide = objTracker.pattern.shape[0] // 2
+            drawTrackingBox(frame)
+            drawPointForSelectedObject(frame)
+            handleMouseCallback()
+            cv2.imshow('frame', frame)
 
         if state == State.PointsNotSelected:
             objTracker.pattern = None
@@ -118,13 +122,20 @@ def startVideoObjectTracking():
         if cv2.waitKey(1) == ord('q'):
             break
 
-        recorder.write(frame)
+        if cv2.waitKey(5) == ord('p'):
+            playVideo = not playVideo
+            if playVideo:
+                print("movie play")
+            else:
+                print("movie pauze")
+
+        # recorder.write(frame)
 
         current_frame += 1
         # cv2.waitKey(delayTime)
 
     video.release()
-    recorder.release()
+    # recorder.release()
     cv2.destroyAllWindows()
 
 def imageTesting():
