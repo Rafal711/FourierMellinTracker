@@ -41,12 +41,19 @@ def drawPointForSelectedObject(frame):
     if isMousePointDefined(mouseXY1):
         cv2.circle(frame, mouseXY1, radius=1, color=(0, 0, 255), thickness=-1)
 
-def drawTrackingBox(frame):
+def drawTrackingBox(frame, objectIsVisible=True):
     if state != State.HalfLengthOfSquareSelected:
         return
+
     pLeftUpper = (mouseXY1[0] - squareHalfSide, mouseXY1[1] + squareHalfSide)
     pRightBottom = (mouseXY1[0] + squareHalfSide, mouseXY1[1] - squareHalfSide)
+    pRightUpper = (mouseXY1[0] + squareHalfSide, mouseXY1[1] + squareHalfSide)
+    pLeftBottom = (mouseXY1[0] - squareHalfSide, mouseXY1[1] - squareHalfSide)
+
     cv2.rectangle(frame, pLeftUpper, pRightBottom, (0, 0, 255), 1)
+    if not objectIsVisible:
+        cv2.line(frame, pLeftUpper, pRightBottom, (0, 0, 255), 1)
+        cv2.line(frame, pRightUpper, pLeftBottom, (0, 0, 255), 1)
 
 def setPatternArea(frame):
     leftSide = mouseXY1[0] - squareHalfSide
@@ -65,7 +72,7 @@ def startVideoObjectTracking():
     movieNames = ["car4", "car11", "david_indoor", "trellis"]
     moviePath = "testVideos/"
     movieFormat = ".avi"
-    choosenMovie = moviePath + movieNames[0] + movieFormat
+    choosenMovie = moviePath + movieNames[1] + movieFormat
 
     video = cv2.VideoCapture(choosenMovie)  # 0 dla kamery
     if not video.isOpened():
@@ -74,7 +81,7 @@ def startVideoObjectTracking():
 
     global mouseXY1, squareHalfSide
     current_frame = 0
-    isObjectVisible = True
+    objectIsVisible = True
     frameRate = video.get(cv2.CAP_PROP_FPS)
 
     playVideo = True
@@ -103,15 +110,16 @@ def startVideoObjectTracking():
                 break
 
         # frame = cv2.resize(frame, dim, interpolation=cv2.INTER_AREA)
+        frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
         grayFrame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
         if True: #current_frame % (math.floor(frameRate / framesPerSecond)) == 0:
             if state == State.HalfLengthOfSquareSelected and playVideo:
                 objTracker.objectTracking(setPatternArea(grayFrame), grayFrame, mouseXY1)
                 mouseXY1 = objTracker.positionGlobal
-                isObjectVisible = objTracker.objectIsVisible
+                objectIsVisible = objTracker.objectIsVisible
                 squareHalfSide = objTracker.pattern.shape[0] // 2
-            drawTrackingBox(frame)
+            drawTrackingBox(frame, objectIsVisible)
             drawPointForSelectedObject(frame)
             handleMouseCallback()
             cv2.imshow('frame', frame)

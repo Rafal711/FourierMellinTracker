@@ -109,7 +109,7 @@ class FourierMellinTracker:
             return searchedImg[upperSide:bottomSide, leftSide:rightSide]
 
         newPatternSize = self.pattern.shape[0] * scale
-        dSide = int((newPatternSize - self.pattern.shape[0]) / 2)
+        dSide = int(round((newPatternSize - self.pattern.shape[0]) / 2))
 
         newLeftSide = leftSide - dSide
         newRightSide = rightSide + dSide
