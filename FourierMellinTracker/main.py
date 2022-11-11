@@ -72,7 +72,7 @@ def startVideoObjectTracking():
     movieNames = ["car4", "car11", "david_indoor", "trellis"]
     moviePath = "testVideos/"
     movieFormat = ".avi"
-    choosenMovie = moviePath + movieNames[1] + movieFormat
+    choosenMovie = moviePath + movieNames[0] + movieFormat
 
     video = cv2.VideoCapture(choosenMovie)  # 0 dla kamery
     if not video.isOpened():
@@ -108,9 +108,9 @@ def startVideoObjectTracking():
             if not frameIsReady:
                 print("Can't receive frame (stream end?). Exiting ...")
                 break
+            # frame = cv2.resize(frame, dim, interpolation=cv2.INTER_AREA)
+            # frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
 
-        # frame = cv2.resize(frame, dim, interpolation=cv2.INTER_AREA)
-        frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
         grayFrame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
         if True: #current_frame % (math.floor(frameRate / framesPerSecond)) == 0:

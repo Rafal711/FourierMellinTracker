@@ -34,6 +34,16 @@ class FourierMellinTracker:
     def reduceEdgeEffects(self, image):
         return image * self.edgeFilter(image.shape[0])
 
+    def normalizeBrightness(self, image):
+        return image / np.mean(image)
+
+    def histogramStretching(self, image):
+        dst = np.zeros(image.shape, 'uint8')
+        return cv2.normalize(image, dst, 0, 256, cv2.NORM_MINMAX)
+
+    def histogramEqualization(self, image):
+        return cv2.equalizeHist(image)
+
     def logPolarTransform(self, image):
         center = (image.shape[0] // 2, image.shape[1] // 2)
         M = image.shape[0] / np.log(image.shape[0] // 2)
@@ -160,12 +170,12 @@ class FourierMellinTracker:
         partSearched = partSearched * filterWin
 
         similarity = compareImgs.ssim(partPattern, partSearched)
-
-        if similarity > 0.8:
+        print(similarity)
+        if similarity > 0.85:
             if partSearched.shape == self.pattern.shape:
                 self.pattern = self.adaptivePatternArea(
                     position, searchedImg, scale, leftSide, rightSide, upperSide, bottomSide)
-        if similarity > 0.6:
+        if similarity > 0.5:
             self.positionMid = position
         if similarity > 0.5:
             self.objectIsVisible = True
@@ -189,7 +199,7 @@ class FourierMellinTracker:
     def initializePattern(self, patternImg, mouseXY):
         if self.pattern is None:
             self.pattern = patternImg
-            self.searchRange = int(patternImg.shape[0] * 1.0)
+            self.searchRange = int(patternImg.shape[0] * 0.8)
             self.positionGlobal = mouseXY
 
     def setSearchedArea(self, frame, searchRange, frameEqSearch):
@@ -243,11 +253,17 @@ class FourierMellinTracker:
         self.initializePattern(patternSection, mouseXY)
         self.setSearchedArea(frame, self.searchRange, frameEqSearch)
 
-        pattern = self.reduceEdgeEffects(self.pattern)
+        pattern = self.histogramStretching(self.pattern)
+        searchedSection = self.histogramStretching(self.searchedArea)
+
+        pattern = self.normalizeBrightness(pattern)
+        searchedSection = self.normalizeBrightness(searchedSection)
+
+        pattern = self.reduceEdgeEffects(pattern)
         patternZP = self.imageZeroPaddingLUC(pattern, self.searchedArea.shape)
 
         patternZPFft = np.fft.fft2(patternZP)
-        searchedFft = np.fft.fft2(self.searchedArea)
+        searchedFft = np.fft.fft2(searchedSection)
 
         patternZPShiftedFft = np.fft.fftshift(patternZPFft)
         searchedShiftedFft = np.fft.fftshift(searchedFft)
