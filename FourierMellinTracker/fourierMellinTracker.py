@@ -9,7 +9,7 @@ class FourierMellinTracker:
     def __init__(self, edgeFilter = filters.hanning2D, highPassFilter = filters.highpass2d):
         self.edgeFilter = edgeFilter
         self.highPassFilter = highPassFilter
-        self.predictedPosition = (None, None)
+        self.predictedPosition = (0, 0)
         self.positionMid = (None, None)
         self.positionGlobal = (None, None)
         self.positionGlobalShift = (0, 0)
@@ -18,6 +18,7 @@ class FourierMellinTracker:
         self.searchedArea = None
         self.pattern = None
         self.frameCnt = 0
+        self.similarity = 0
 
     def imageZeroPaddingLUC(self, image, targetSize):
         additionSize = (targetSize[0] - image.shape[0], targetSize[1] - image.shape[1])
@@ -68,15 +69,15 @@ class FourierMellinTracker:
         scale = np.exp(scaleIndexFactor / M)
         return angles, scale
 
+    def getRotatedAndScaledImg(self, image, angle, scale):
+        middleOfTranslation = (image.shape[0] / 2 - 0.5, image.shape[1] / 2 - 0.5)
+        translationMatrix = cv2.getRotationMatrix2D(middleOfTranslation, angle, scale)
+        return cv2.warpAffine(image, translationMatrix, image.shape)
+
     def getRotatedScaledPatterns(self, patternImg, searchedImgSize, angles, scale):
         patternZP = self.imageZeroPaddingMid(patternImg, searchedImgSize)
-        middleOfTranslation = (patternZP.shape[0] / 2 - 0.5, patternZP.shape[1] / 2 - 0.5)
-
-        translationMatrix1 = cv2.getRotationMatrix2D(middleOfTranslation, angles[0], scale)
-        imgRotatedScaled1 = cv2.warpAffine(patternZP, translationMatrix1, patternZP.shape)
-
-        translationMatrix2 = cv2.getRotationMatrix2D(middleOfTranslation, angles[1], scale)
-        imgRotatedScaled2 = cv2.warpAffine(patternZP, translationMatrix2, patternZP.shape)
+        imgRotatedScaled1 = self.getRotatedAndScaledImg(patternZP, angles[0], scale)
+        imgRotatedScaled2 = self.getRotatedAndScaledImg(patternZP, angles[1], scale)
         return imgRotatedScaled1, imgRotatedScaled2
 
     def bestTransformedPattern(self, img1, img2, searchedImgFft):
@@ -89,12 +90,14 @@ class FourierMellinTracker:
         if np.amax(img1PhaseCorrelation) > np.amax(img2PhaseCorrelation):
             betterPhaseCorr = img1PhaseCorrelation
             betterImg = img1
+            betterId = 0
         else:
             betterPhaseCorr = img2PhaseCorrelation
             betterImg = img2
+            betterId = 1
 
         dy, dx = np.unravel_index(np.argmax(betterPhaseCorr), betterPhaseCorr.shape)
-        return betterImg, (dx, dy)
+        return betterImg, (dx, dy), betterId
 
     def shiftImage(self, img, shift):
         shiftedImg = np.roll(img, shift[0], axis=1)  # horizontally
@@ -114,9 +117,14 @@ class FourierMellinTracker:
 
         self.predictedPosition = (x, y)
 
-    def adaptivePatternArea(self, position, searchedImg, scale, leftSide, rightSide, upperSide, bottomSide):
-        if scale == 1:
-            return searchedImg[upperSide:bottomSide, leftSide:rightSide]
+    def adaptivePatternArea(self, position, searchedImg, scale, shift, angle):
+        horizSpace = self.pattern.shape[0] // 2
+        verSpace = self.pattern.shape[1] // 2
+
+        leftSide = position[0] - horizSpace
+        rightSide = position[0] + horizSpace
+        upperSide = position[1] - verSpace
+        bottomSide = position[1] + verSpace
 
         newPatternSize = self.pattern.shape[0] * scale
         dSide = int(round((newPatternSize - self.pattern.shape[0]) / 2))
@@ -139,9 +147,12 @@ class FourierMellinTracker:
         newRange = newRangeCriterion(position[0] - newLeftSide, newRightSide - position[0],
                                      position[1] - newUpperSide, newBottomSide - position[1])
 
-        return searchedImg[position[1]-newRange : position[1]+newRange, position[0]-newRange : position[0]+newRange]
+        searchedModified = self.shiftImage(searchedImg, (-shift[0], -shift[1]))
+        searchedModified = self.getRotatedAndScaledImg(searchedModified, angle, scale)
+        middle = (searchedModified.shape[0] // 2, searchedModified.shape[1] // 2)
+        return searchedImg[middle[0] - newRange: middle[0] + newRange, middle[1] - newRange: middle[1] + newRange]
 
-    def updatePatternAndPosition(self, position, patternTransformed, searchedImg, scale = 1):
+    def checkProbabilityOfFindingPattern(self, position, patternTransformed, searchedImg):
         horizSpace = self.pattern.shape[0] // 2
         verSpace = self.pattern.shape[1] // 2
 
@@ -170,31 +181,35 @@ class FourierMellinTracker:
         partSearched = partSearched * filterWin
 
         similarity = compareImgs.ssim(partPattern, partSearched)
-        print(similarity)
-        if similarity > 0.85:
-            if partSearched.shape == self.pattern.shape:
-                self.pattern = self.adaptivePatternArea(
-                    position, searchedImg, scale, leftSide, rightSide, upperSide, bottomSide)
-        if similarity > 0.5:
+        entireObjectFound = partSearched.shape == self.pattern.shape
+        return similarity, entireObjectFound
+
+    def updatePatternAndPosition(self, position, patternTransformed, searchedImg, scale, shift, angle):
+        similarity, entireObjectFound = self.checkProbabilityOfFindingPattern(position, patternTransformed, searchedImg)
+        self.similarity = similarity
+        if similarity > 0.6:
+            if entireObjectFound:
+                self.pattern = self.adaptivePatternArea(position, searchedImg, scale, shift, angle)
+        if similarity > 0.6:
             self.positionMid = position
         if similarity > 0.5:
             self.objectIsVisible = True
         else:
             self.objectIsVisible = False
 
-    def checkWrapedAroundPositions(self, patternTransformed, searchedImg, tolerance = 5):
+    def checkWrapedAroundPositions(self, patternTransformed, searchedImg, scale, shift, angle, tolerance = 5):
         if not self.objectIsVisible:
             newPositionXY = list(self.predictedPosition)
             if (self.predictedPosition[0] - tolerance < 0) or (self.predictedPosition[0] + tolerance > searchedImg.shape[0]):
                 newPositionXY[0] = searchedImg.shape[0] - self.predictedPosition[0]
-                self.updatePatternAndPosition(newPositionXY, patternTransformed, searchedImg)
+                self.updatePatternAndPosition(newPositionXY, patternTransformed, searchedImg, scale, shift, angle)
 
             if (self.predictedPosition[1] - tolerance < 0) or (self.predictedPosition[1] + tolerance > searchedImg.shape[1]):
                 newPositionXY[1] = searchedImg.shape[1] - self.predictedPosition[1]
-                self.updatePatternAndPosition(newPositionXY, patternTransformed, searchedImg)
+                self.updatePatternAndPosition(newPositionXY, patternTransformed, searchedImg, scale, shift, angle)
 
             if self.predictedPosition != tuple(newPositionXY):
-                self.updatePatternAndPosition(newPositionXY, patternTransformed, searchedImg)
+                self.updatePatternAndPosition(newPositionXY, patternTransformed, searchedImg, scale, shift, angle)
 
     def initializePattern(self, patternImg, mouseXY):
         if self.pattern is None:
@@ -283,15 +298,17 @@ class FourierMellinTracker:
 
         img1, img2 = self.getRotatedScaledPatterns(self.pattern, self.searchedArea.shape, angles, scale)
 
-        patternRotatedScaled, shift = self.bestTransformedPattern(img1, img2, searchedFft)
+        patternRotatedScaled, shift, betterId = self.bestTransformedPattern(img1, img2, searchedFft)
 
         patternTransformed = self.shiftImage(patternRotatedScaled, shift)
 
         self.predictObjectPosition(self.searchedArea.shape, shift)
 
-        self.updatePatternAndPosition(self.predictedPosition, patternTransformed, self.searchedArea, scale)
-        self.checkWrapedAroundPositions(patternTransformed, self.searchedArea)
+        self.updatePatternAndPosition(self.predictedPosition, patternTransformed, self.searchedArea, scale, shift, angles[betterId])
+        self.checkWrapedAroundPositions(patternTransformed, self.searchedArea, scale, shift, angles[betterId])
 
         self.updatePositionGlobal()
-        iplt.plotImages1x2(patternTransformed, self.searchedArea, self.pattern.shape, self.predictedPosition, self.objectIsVisible, self.frameCnt)
+        iplt.plotImages1x2(patternTransformed, self.searchedArea, self.pattern.shape, self.predictedPosition,
+                           self.objectIsVisible, self.frameCnt,  self.similarity)
         self.frameCnt += 1
+        print(scale)

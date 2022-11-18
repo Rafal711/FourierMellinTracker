@@ -11,7 +11,7 @@ def plotImage(img, title=""):
     ax.set_title(title)
     plt.show()
 
-def plotImages1x2(pattern, searchedImg, orgSize, position, visibilityFlag=True, frameNr=0):
+def plotImages1x2(pattern, searchedImg, orgSize, position, visibilityFlag=True, frameNr=0, similarity=0):
     squareX = position[0] - orgSize[0] // 2
     squareY = position[1] - orgSize[1] // 2
     box1 = patches.Rectangle((squareX, squareY), orgSize[0], orgSize[1],
@@ -30,7 +30,7 @@ def plotImages1x2(pattern, searchedImg, orgSize, position, visibilityFlag=True, 
 
     ax2.imshow(searchedImg, cmap='gray', vmin=0, vmax=255)
     ax2.plot(position[0], position[1], "ro")
-    ax2.set_title("searched image")
+    ax2.set_title(f"searched image {similarity}")
     ax2.set_xlim(0, pattern.shape[0])
     ax2.set_ylim(pattern.shape[1], 0)
     if visibilityFlag:
