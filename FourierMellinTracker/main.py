@@ -68,11 +68,12 @@ def handleMouseCallback():
 def fpsToDelayTime(fps):
     return int(1000/fps)
 
+
 def startVideoObjectTracking():
     movieNames = ["car4", "car11", "david_indoor", "trellis"]
     moviePath = "testVideos/"
     movieFormat = ".avi"
-    choosenMovie = moviePath + movieNames[0] + movieFormat
+    choosenMovie = moviePath + movieNames[2] + movieFormat
 
     video = cv2.VideoCapture(choosenMovie)  # 0 dla kamery
     if not video.isOpened():
@@ -146,6 +147,11 @@ def startVideoObjectTracking():
     # recorder.release()
     cv2.destroyAllWindows()
 
+
+def startVideoObjectTrackingMeanShift():
+    raise NotImplementedError
+
+
 def imageTesting():
     path = "obrazy_Mellin"
     imgsPath = "obrazy_Mellin/"
@@ -174,4 +180,5 @@ def imageTesting():
 if __name__ == '__main__':
     # startVideoProcessing()
     # imageTesting()
-    startVideoObjectTracking()
+    # startVideoObjectTracking()
+    startVideoObjectTrackingMeanShift()
