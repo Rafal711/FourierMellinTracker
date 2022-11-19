@@ -148,7 +148,7 @@ class FourierMellinTracker:
                                      position[1] - newUpperSide, newBottomSide - position[1])
 
         searchedModified = self.shiftImage(searchedImg, (-shift[0], -shift[1]))
-        searchedModified = self.getRotatedAndScaledImg(searchedModified, angle, scale)
+        searchedModified = self.getRotatedAndScaledImg(searchedModified, -angle, scale)
         middle = (searchedModified.shape[0] // 2, searchedModified.shape[1] // 2)
         return searchedImg[middle[0] - newRange: middle[0] + newRange, middle[1] - newRange: middle[1] + newRange]
 
