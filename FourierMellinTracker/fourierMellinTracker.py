@@ -104,9 +104,9 @@ class FourierMellinTracker:
         shiftedImg = np.roll(img, shift[0], axis=1)  # horizontally
         return np.roll(shiftedImg, shift[1], axis=0)  # vertically
 
-    def predictObjectPosition(self, searchedImgSize, shift):
-        dxZP = (searchedImgSize[0] - self.pattern.shape[0]) // 2
-        dyZP = (searchedImgSize[1] - self.pattern.shape[1]) // 2
+    def predictObjectPosition(self, searchedImgSize, shift, scale=1):
+        dxZP = (searchedImgSize[0] - int(self.pattern.shape[0] * scale)) // 2
+        dyZP = (searchedImgSize[1] - int(self.pattern.shape[1] * scale)) // 2
 
         x = dxZP + (self.pattern.shape[0] // 2) + shift[0]
         y = dyZP + (self.pattern.shape[1] // 2) + shift[1]
@@ -125,6 +125,7 @@ class FourierMellinTracker:
         oldPattern = patternZP[middle[0] - newRange: middle[0] + newRange, middle[1] - newRange: middle[1] + newRange]
         bestPattern = searchedImg[middle[0] - newRange: middle[0] + newRange, middle[1] - newRange: middle[1] + newRange]
         bestProbability = 0
+        bestShift = (0, 0)
         for i in range(-1, 2):
             for j in range(-1, 2):
                 newPattern = searchedImg[middle[0] - newRange + i: middle[0] + newRange + i,
@@ -133,6 +134,8 @@ class FourierMellinTracker:
                 if currProbability > bestProbability:
                     bestProbability = currProbability
                     bestPattern = newPattern
+                    bestShift = i, j
+        self.predictedPosition = (self.predictedPosition[0] + bestShift[0], self.predictedPosition[1] + bestShift[1])
         return bestPattern
 
     def adaptivePatternArea(self, position, searchedImg, scale, shift, angle):
@@ -205,10 +208,10 @@ class FourierMellinTracker:
     def updatePatternAndPosition(self, position, patternTransformed, searchedImg, scale, shift, angle):
         similarity, entireObjectFound = self.checkProbabilityOfFindingPattern(position, patternTransformed, searchedImg)
         self.similarity = similarity
-        if similarity > 0.6:
+        if similarity > 0.5:
             if entireObjectFound:
                 self.pattern = self.adaptivePatternArea(position, searchedImg, scale, shift, angle)
-        if similarity > 0.6:
+        if similarity > 0.5:
             self.positionMid = position
         if similarity > 0.5:
             self.objectIsVisible = True
@@ -320,7 +323,7 @@ class FourierMellinTracker:
 
         patternTransformed = self.shiftImage(patternRotatedScaled, shift)
 
-        self.predictObjectPosition(self.searchedArea.shape, shift)
+        self.predictObjectPosition(self.searchedArea.shape, shift, scale)
         pC = self.pattern.copy()
         self.updatePatternAndPosition(self.predictedPosition, patternTransformed, self.searchedArea, scale, shift, angles[betterId])
         self.checkWrapedAroundPositions(patternTransformed, self.searchedArea, scale, shift, angles[betterId])
@@ -328,6 +331,7 @@ class FourierMellinTracker:
         self.updatePositionGlobal()
         # iplt.plotImages1x2(patternTransformed, self.searchedArea, self.pattern.shape, self.predictedPosition,
         #                    self.objectIsVisible, self.frameCnt,  self.similarity)
-        # iplt.plotImages1x3(patternTransformed, self.searchedArea, pC.shape, self.predictedPosition, pC,
-        #                    self.objectIsVisible, self.frameCnt, self.similarity)
+        iplt.plotImages1x3(patternTransformed, self.searchedArea, pC.shape, self.predictedPosition, pC,
+                           self.objectIsVisible, self.frameCnt, self.similarity)
         self.frameCnt += 1
+        print(self.frameCnt)
